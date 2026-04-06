@@ -6,7 +6,12 @@
 *.swp
 .buildlog/
 .history
+.DS_Store
 
+#Flutter Package
+/pubspec.lock
+
+!/example/pubspec.lock
 
 
 # Flutter repo-specific
@@ -117,3 +122,16 @@ app.*.symbols
 !**/ios/**/default.perspectivev3
 !/packages/flutter_tools/test/data/dart_dependencies_test/**/.packages
 !/dev/ci/**/Gemfile.lock
+
+# example app exceptions
+/example/.gitignore
+/example/.metadata
+/example/README.md
+/example/analysis_options.yaml
+/example/android/*
+/example/ios/*
+/example/linux/*
+/example/macos/*
+/example/test/*
+/example/web/*
+/example/windows/*
