@@ -29,7 +29,7 @@ flutter pub add configbee_flutter
 
 > 💡 If the above doesn't install the latest version, specify it explicitly:
 > ```bash
-> flutter pub add 'configbee_flutter:^0.0.1-alpha.0'
+> flutter pub add 'configbee_flutter:^0.0.1-alpha.1'
 > ```
 
 ## Usage
