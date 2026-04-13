@@ -2,6 +2,7 @@ import 'package:configbee_flutter/configbee_flutter.dart';
 import 'package:flutter/material.dart';
 
 void main() {
+  WidgetsFlutterBinding.ensureInitialized();
   final cb = ConfigbeeClient.init(ConfigbeeClientParams(
     accountId: "YOUR_ACCOUNT_ID",
     projectId: "YOUR_PROJECT_ID",
