@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:dio_cache_interceptor/dio_cache_interceptor.dart';
 import 'package:flutter_client_sse/constants/sse_request_type_enum.dart';
 import 'package:flutter_client_sse/flutter_client_sse.dart';
 import 'package:http/http.dart' as http;
@@ -279,8 +278,8 @@ class ConfigbeeClient {
         await StorageHelper.getActiveSessionData(params.key!, _envKey);
     if (sessionData == null) return;
     try {
-      unawaited(http.get(Uri.parse(
-          '$baseUrl$_envKey/cs-${sessionData.key}--vh-${sessionData.versionHash}.json')));
+      unawaited(HttpHelper.fetchRetry(
+          '$baseUrl$_envKey/cs-${sessionData.key}--vh-${sessionData.versionHash}.json'));
     } catch (_) {}
   }
 
@@ -570,9 +569,15 @@ class ConfigbeeClient {
 
   Future<void> _runHttpSource(
       {required String key, required HttpFetchSource source}) async {
+    final cacheMode = switch (source.cacheMode) {
+      'none' => FetchCacheMode.noCache,
+      'full' => FetchCacheMode.forceCache,
+      _ => FetchCacheMode.request,
+    };
     do {
       try {
-        await _fetchHttpAndProcess(await _getHttpPath(baseUrl: source.baseUrl));
+        await _fetchHttpAndProcess(await _getHttpPath(baseUrl: source.baseUrl),
+            cacheMode: cacheMode);
         if (!source.enablePolling) break;
       } catch (_) {}
       await Future.delayed(Duration(milliseconds: source.pollingDelay));
@@ -593,34 +598,34 @@ class ConfigbeeClient {
             baseUrl: source.fetchBaseUrls.cdnCached,
             distributionObjKey: fetchObjKey,
             useVersionedUrl: true),
-        policy: CachePolicy.forceCache
+        cacheMode: FetchCacheMode.forceCache
       ),
       (
         url: await _getHttpPath(
             baseUrl: source.fetchBaseUrls.staticStore,
             distributionObjKey: fetchObjKey,
             useVersionedUrl: true),
-        policy: CachePolicy.request
+        cacheMode: FetchCacheMode.request
       ),
       (
         url: await _getHttpPath(
             baseUrl: source.fetchBaseUrls.direct,
             distributionObjKey: fetchObjKey,
             useVersionedUrl: true),
-        policy: CachePolicy.request
+        cacheMode: FetchCacheMode.request
       ),
       (
         url: await _getHttpPath(
             baseUrl: source.fetchBaseUrls.staticStore,
             distributionObjKey: fetchObjKey,
             useVersionedUrl: false),
-        policy: CachePolicy.request
+        cacheMode: FetchCacheMode.request
       ),
     ];
     Exception? last;
     for (final t in tries) {
       try {
-        await _fetchHttpAndProcess(t.url, cachePolicy: t.policy);
+        await _fetchHttpAndProcess(t.url, cacheMode: t.cacheMode);
         return;
       } catch (e) {
         last = e is Exception ? e : Exception(e.toString());
@@ -630,8 +635,8 @@ class ConfigbeeClient {
   }
 
   Future<void> _fetchHttpAndProcess(String url,
-      {CachePolicy? cachePolicy}) async {
-    final res = await HttpHelper.fetchRetry(url, cachePolicy: cachePolicy);
+      {FetchCacheMode cacheMode = FetchCacheMode.request}) async {
+    final res = await HttpHelper.fetchRetry(url, cacheMode: cacheMode);
     if (res.statusCode == 404) throw Exception('HTTP 404');
     if (res.statusCode != 200) {
       throw Exception('Unexpected HTTP status: ${res.statusCode}');
