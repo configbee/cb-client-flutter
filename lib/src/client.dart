@@ -11,6 +11,7 @@ import 'models/models.dart';
 import 'utils/http_helper.dart';
 import 'utils/sdk_info.dart';
 import 'utils/storage_helper.dart';
+import 'utils/modifier_evaluator.dart';
 
 class ConfigbeeClientParams {
   final String? accountId;
@@ -67,6 +68,7 @@ class ConfigbeeClient {
   bool _sseActive = false;
   SSESource? _sseSource;
   String? _sseKey;
+  List<Map<String, String>> _contextAssignments = [];
   String? _visitorId;
   String? _directBaseUrl;
   String? _lastTracedServingVersion;
@@ -300,6 +302,10 @@ class ConfigbeeClient {
     }
     _currentTargetProperties =
         (resBody['targetProperties'] as Map?)?.cast<String, String>();
+    _contextAssignments = (resBody['contextAssignments'] as List?)
+            ?.map((e) => Map<String, String>.from(e as Map))
+            .toList() ??
+        [];
 
     _handleConfigGroupsData(resBody['configGroups'] as Map<String, dynamic>?);
     _handleTargetingData(resBody['targetingData'] as Map<String, dynamic>?);
@@ -700,6 +706,7 @@ class ConfigbeeClient {
     _sessionStatus = CbStatus.deactive;
     _currentTargetProperties = null;
     _currentTargetingData.clear();
+    _contextAssignments = [];
 
     if (sessionData?.key != null) _previousSessionKey = sessionData!.key;
 
@@ -745,17 +752,34 @@ class ConfigbeeClient {
 
   Map<String, OptionData>? _getCombinedContent() {
     if (_status != CbStatus.active) return null;
-    final base = _currentConfigGroupsData['default']?.content;
-    if (base == null) return null;
+    final baseObj = _currentConfigGroupsData['default'];
+    if (baseObj == null) return null;
+    final base = baseObj.content;
+
+    final modifierExtras = <Map<String, OptionData>>[];
+    final cm = baseObj.contentModifiers;
+    if (cm != null && cm.keys.isNotEmpty) {
+      for (final key in cm.keys) {
+        final modifier = cm.data[key];
+        if (modifier != null &&
+            ModifierEvaluator.evaluate(
+                modifier, _visitorId ?? '', _contextAssignments) &&
+            modifier.content != null) {
+          modifierExtras.add(modifier.content!);
+        }
+      }
+    }
 
     if (_isSessionActive()) {
       final keys = _currentTargetingData['default']?.distributionKeys ?? [];
       final distData = _currentTargetingData['default']!.distributionData;
-      final extras = keys
+      final targetingExtras = keys
           .map((k) => distData[k]?.content)
           .whereType<Map<String, OptionData>>()
           .toList();
-      return _combineContent(base: base, extras: extras);
+      return _combineContent(base: base, extras: [...modifierExtras, ...targetingExtras]);
+    } else if (modifierExtras.isNotEmpty) {
+      return _combineContent(base: base, extras: modifierExtras);
     }
     return base;
   }
