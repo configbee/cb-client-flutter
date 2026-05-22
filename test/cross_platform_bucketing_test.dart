@@ -5,8 +5,9 @@
 // Canonical spec: internal-docs/SDK-PERCENTAGE-BUCKETING.md
 
 import 'dart:io';
-import 'package:flutter_test/flutter_test.dart';
+
 import 'package:configbee_flutter/src/utils/percentage_bucketing.dart';
+import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   group('cross-platform consistency — 1000 samples (500 VISITOR + 500 ASSIGNMENT)', () {
@@ -22,7 +23,7 @@ void main() {
       final minPct = double.parse(parts[4]);
 
       test('$mode $input → hash=$expectedHash minPct=$minPct%', () {
-        expect(djb2Hash(input + ':' + salt).toUnsigned(32), expectedHash);
+        expect(djb2Hash('$input:$salt').toUnsigned(32), expectedHash);
         expect(isInPercentageBucket(input, minPct - 0.0001, salt: salt), false);
         expect(isInPercentageBucket(input, minPct, salt: salt), true);
         expect(isInPercentageBucket(input, 100, salt: salt), true);

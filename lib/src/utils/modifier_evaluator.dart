@@ -35,21 +35,28 @@ class ModifierEvaluator {
         final keyIn = (args['key-in'] as List?)?.cast<String>();
         final valueIn = (args['value-in'] as List?)?.cast<String>();
         if (key != null &&
-            !contextAssignments.any((a) => a['key'] == key)) return false;
+            !contextAssignments.any((a) => a['key'] == key)) {
+          return false;
+        }
         if (value != null &&
             contextAssignments
                     .where((a) => a['key'] == key)
                     .map((a) => a['value'])
                     .firstOrNull !=
-                value) return false;
-        if (keyIn != null &&
-            !contextAssignments.any((a) => keyIn.contains(a['key'])))
+                value) {
           return false;
+        }
+        if (keyIn != null &&
+            !contextAssignments.any((a) => keyIn.contains(a['key']))) {
+          return false;
+        }
         if (valueIn != null &&
             !valueIn.contains(contextAssignments
                 .where((a) => a['key'] == key)
                 .map((a) => a['value'])
-                .firstOrNull)) return false;
+                .firstOrNull)) {
+          return false;
+        }
         return true;
 
       case 'MATCH_ANY':

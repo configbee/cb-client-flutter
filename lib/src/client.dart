@@ -9,9 +9,9 @@ import 'package:http/http.dart' as http;
 import 'config.dart';
 import 'models/models.dart';
 import 'utils/http_helper.dart';
+import 'utils/modifier_evaluator.dart';
 import 'utils/sdk_info.dart';
 import 'utils/storage_helper.dart';
-import 'utils/modifier_evaluator.dart';
 
 class ConfigbeeClientParams {
   final String? accountId;
@@ -905,7 +905,7 @@ class ConfigbeeClient {
       unawaited(http
           .post(Uri.parse(traceUrl),
               headers: {'Content-Type': 'text/plain'}, body: body)
-          .catchError((_) {}));
+          .catchError((_) => http.Response('', 0)));
     }).catchError((_) {});
   }
 
@@ -932,7 +932,9 @@ class ConfigbeeClient {
         (await StorageHelper.getActiveSessionData(params.key!, _envKey))
             ?.versionHash;
     if (servingVersion == _lastTracedServingVersion &&
-        sessionHash == _lastTracedSessionVersionHash) return;
+        sessionHash == _lastTracedSessionVersionHash) {
+      return;
+    }
     _lastTracedServingVersion = servingVersion;
     _lastTracedSessionVersionHash = sessionHash;
     _sendTrace([
