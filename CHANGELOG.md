@@ -1,3 +1,9 @@
+## 0.0.2
+
+* Feat: SDK-managed rollouts via content modifiers — supports `PERCENTAGE_HASH`, `ASSIGNMENT_MATCH`, `MATCH_ANY`, and `MATCH_ALL` modifier evaluation.
+* Feat: SDK tracing — sends `client-ready`, `stream-connected`, and `client-state-updated` events to the trace endpoint with a persistent `visitorId`.
+* Fix: Resolve Flutter analyzer warnings (`catchError` return type, pubspec dependency sort order).
+
 ## 0.0.1
 
 * **Initial Release:** Official promotion out of alpha.
