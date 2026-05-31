@@ -1,6 +1,6 @@
 name: configbee_flutter
 description: Flutter SDK for Configbee - A feature flags and remote configuration management client library
-version: 0.0.1-alpha.1
+version: 0.0.1-alpha.2
 homepage: https://docs.configbee.com/client-sdks/flutter/
 repository: https://github.com/configbee/cb-client-flutter
 topics:
