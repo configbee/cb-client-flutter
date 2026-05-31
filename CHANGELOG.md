@@ -1,3 +1,9 @@
+## 0.0.1
+
+* **Initial Release:** Official promotion out of alpha.
+* **Core Features:** Includes `ConfigbeeProvider`, `ConfigbeeBuilder`, and `ConfigbeeFlag` widgets for remote configuration.
+* **Platform Support:** Full Web and Mobile support out of the box, featuring native browser HTTP caching and optimized conditional imports.
+
 ## 0.0.1-alpha.2
 
 * fix(web): using conditional import for path_provider. This marks Web platform support in pub.dev
