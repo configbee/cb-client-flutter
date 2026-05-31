@@ -1,3 +1,7 @@
+## 0.0.1-alpha.2
+
+* fix(web): using conditional import for path_provider. This marks Web platform support in pub.dev
+
 ## 0.0.1-alpha.1
 
 * Fix: Use browser native HTTP cache on web instead of in-memory MemCacheStore, enabling persistent caching across page refreshes via CDN Cache-Control headers.

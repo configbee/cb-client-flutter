@@ -5,7 +5,8 @@ import 'package:http/http.dart' as http;
 import 'package:http_cache_client/http_cache_client.dart';
 import 'package:http_cache_core/http_cache_core.dart';
 import 'package:http_cache_hive_store/http_cache_hive_store.dart';
-import 'package:path_provider/path_provider.dart';
+import 'cache_dir_stub.dart'
+    if (dart.library.io) 'cache_dir_native.dart';
 
 enum FetchCacheMode { forceCache, request, noCache }
 
@@ -23,8 +24,8 @@ class HttpHelper {
 
   static Future<CacheClient> _getNativeClient() async {
     if (_cacheClient != null) return _cacheClient!;
-    final dir = await getApplicationCacheDirectory();
-    final store = HiveCacheStore('${dir.path}/configbee_cache');
+    final dirPath = await getCacheDirectoryPath();
+    final store = HiveCacheStore('$dirPath/configbee_cache');
     _defaultCacheOptions = CacheOptions(
       store: store,
       policy: CachePolicy.request,
