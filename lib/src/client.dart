@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:flutter_client_sse/constants/sse_request_type_enum.dart';
 import 'package:flutter_client_sse/flutter_client_sse.dart';
@@ -8,6 +9,8 @@ import 'package:http/http.dart' as http;
 import 'config.dart';
 import 'models/models.dart';
 import 'utils/http_helper.dart';
+import 'utils/modifier_evaluator.dart';
+import 'utils/sdk_info.dart';
 import 'utils/storage_helper.dart';
 
 class ConfigbeeClientParams {
@@ -65,6 +68,11 @@ class ConfigbeeClient {
   bool _sseActive = false;
   SSESource? _sseSource;
   String? _sseKey;
+  List<Map<String, String>> _contextAssignments = [];
+  String? _visitorId;
+  String? _directBaseUrl;
+  String? _lastTracedServingVersion;
+  String? _lastTracedSessionVersionHash;
 
   Map<String, String>? _targetProperties;
   bool _targetPropertiesExplicitNull = false;
@@ -294,6 +302,10 @@ class ConfigbeeClient {
     }
     _currentTargetProperties =
         (resBody['targetProperties'] as Map?)?.cast<String, String>();
+    _contextAssignments = (resBody['contextAssignments'] as List?)
+            ?.map((e) => Map<String, String>.from(e as Map))
+            .toList() ??
+        [];
 
     _handleConfigGroupsData(resBody['configGroups'] as Map<String, dynamic>?);
     _handleTargetingData(resBody['targetingData'] as Map<String, dynamic>?);
@@ -400,10 +412,12 @@ class ConfigbeeClient {
       try {
         params.onReady?.call();
       } catch (_) {}
+      unawaited(_fireReadyTrace());
     } else {
       try {
         params.onUpdate?.call();
       } catch (_) {}
+      unawaited(_fireUpdateTrace());
     }
     _notifiedData = snapshot;
   }
@@ -416,6 +430,9 @@ class ConfigbeeClient {
       {required String key, required SSESource source}) async {
     _sseSource = source;
     _sseKey = key;
+    _directBaseUrl = source.fetchBaseUrls.direct;
+    _visitorId ??=
+        await StorageHelper.getOrCreateVisitorId(params.key!, _distributionObjKey);
 
     Future<String> sessionFlow() async {
       if (_isSessionRequired()) {
@@ -509,6 +526,7 @@ class ConfigbeeClient {
           if (_sseActive) _continueSse();
         },
       );
+      _sendTrace([_makeEvent('stream-connected', {})]);
     } catch (_) {
       if (_sseActive) {
         unawaited(_continueSse());
@@ -667,10 +685,10 @@ class ConfigbeeClient {
       final sessionData =
           await StorageHelper.getActiveSessionData(params.key!, _envKey);
       if (sessionData == null) return null;
-      return '${_sseSource!.eventsBaseUrl}a-${params.accountId}/p-${params.projectId}/e-${params.environmentId}/cs-${sessionData.key}.events?svh=${sessionData.versionHash}';
+      return '${_sseSource!.eventsBaseUrl}a-${params.accountId}/p-${params.projectId}/e-${params.environmentId}/cs-${sessionData.key}.events?svh=${sessionData.versionHash}&vid=$_visitorId';
     }
     final versionId = _currentConfigGroupsData['default']?.meta.versionId;
-    return '${_sseSource!.eventsBaseUrl}$_distributionObjKey.events?sv=$versionId';
+    return '${_sseSource!.eventsBaseUrl}$_distributionObjKey.events?sv=$versionId&vid=$_visitorId';
   }
 
   // ---------------------------------------------------------------------------
@@ -688,6 +706,7 @@ class ConfigbeeClient {
     _sessionStatus = CbStatus.deactive;
     _currentTargetProperties = null;
     _currentTargetingData.clear();
+    _contextAssignments = [];
 
     if (sessionData?.key != null) _previousSessionKey = sessionData!.key;
 
@@ -733,17 +752,34 @@ class ConfigbeeClient {
 
   Map<String, OptionData>? _getCombinedContent() {
     if (_status != CbStatus.active) return null;
-    final base = _currentConfigGroupsData['default']?.content;
-    if (base == null) return null;
+    final baseObj = _currentConfigGroupsData['default'];
+    if (baseObj == null) return null;
+    final base = baseObj.content;
+
+    final modifierExtras = <Map<String, OptionData>>[];
+    final cm = baseObj.contentModifiers;
+    if (cm != null && cm.keys.isNotEmpty) {
+      for (final key in cm.keys) {
+        final modifier = cm.data[key];
+        if (modifier != null &&
+            ModifierEvaluator.evaluate(
+                modifier, _visitorId ?? '', _contextAssignments) &&
+            modifier.content != null) {
+          modifierExtras.add(modifier.content!);
+        }
+      }
+    }
 
     if (_isSessionActive()) {
       final keys = _currentTargetingData['default']?.distributionKeys ?? [];
       final distData = _currentTargetingData['default']!.distributionData;
-      final extras = keys
+      final targetingExtras = keys
           .map((k) => distData[k]?.content)
           .whereType<Map<String, OptionData>>()
           .toList();
-      return _combineContent(base: base, extras: extras);
+      return _combineContent(base: base, extras: [...modifierExtras, ...targetingExtras]);
+    } else if (modifierExtras.isNotEmpty) {
+      return _combineContent(base: base, extras: modifierExtras);
     }
     return base;
   }
@@ -825,6 +861,88 @@ class ConfigbeeClient {
           in c.entries.where((e) => e.value.optionType == CbOptionType.json))
         e.key: e.value.jsonValue
     };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Tracing
+  // ---------------------------------------------------------------------------
+
+  static String _generateEventId() {
+    final rng = Random.secure();
+    final bytes = List<int>.generate(16, (_) => rng.nextInt(256));
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    String hex(int b) => b.toRadixString(16).padLeft(2, '0');
+    final h = bytes.map(hex).join();
+    return '${h.substring(0, 8)}-${h.substring(8, 12)}-${h.substring(12, 16)}-${h.substring(16, 20)}-${h.substring(20)}';
+  }
+
+  Map<String, dynamic> _makeEvent(String type, Map<String, dynamic> props) => {
+        'clientSideId': _generateEventId(),
+        'clientSideTsMs': DateTime.now().millisecondsSinceEpoch,
+        'type': type,
+        'props': props,
+      };
+
+  void _sendTrace(List<Map<String, dynamic>> events) {
+    if (_directBaseUrl == null) return;
+    final traceUrl =
+        '${_directBaseUrl}a-${params.accountId}/p-${params.projectId}/e-${params.environmentId}/trace';
+    final servingVersion = _currentConfigGroupsData['default']?.meta.versionId;
+    getSdkVersion().then((sdkVersion) async {
+      final sessionHash =
+          (await StorageHelper.getActiveSessionData(params.key!, _envKey))
+              ?.versionHash;
+      final payload = {
+        'visitorId': _visitorId,
+        'sdkName': 'cb-client-flutter',
+        'sdkVersion': sdkVersion,
+        'servingVersion': servingVersion,
+        'sessionVersionHash': sessionHash,
+        'events': events,
+      };
+      final body = base64Encode(utf8.encode(jsonEncode(payload)));
+      unawaited(http
+          .post(Uri.parse(traceUrl),
+              headers: {'Content-Type': 'text/plain'}, body: body)
+          .catchError((_) => http.Response('', 0)));
+    }).catchError((_) {});
+  }
+
+  Future<void> _fireReadyTrace() async {
+    final servingVersion =
+        _currentConfigGroupsData['default']?.meta.versionId;
+    final sessionHash =
+        (await StorageHelper.getActiveSessionData(params.key!, _envKey))
+            ?.versionHash;
+    _lastTracedServingVersion = servingVersion;
+    _lastTracedSessionVersionHash = sessionHash;
+    _sendTrace([
+      _makeEvent('client-ready', {
+        'servingVersion': servingVersion,
+        'sessionVersionHash': sessionHash,
+      })
+    ]);
+  }
+
+  Future<void> _fireUpdateTrace() async {
+    final servingVersion =
+        _currentConfigGroupsData['default']?.meta.versionId;
+    final sessionHash =
+        (await StorageHelper.getActiveSessionData(params.key!, _envKey))
+            ?.versionHash;
+    if (servingVersion == _lastTracedServingVersion &&
+        sessionHash == _lastTracedSessionVersionHash) {
+      return;
+    }
+    _lastTracedServingVersion = servingVersion;
+    _lastTracedSessionVersionHash = sessionHash;
+    _sendTrace([
+      _makeEvent('client-state-updated', {
+        'servingVersion': servingVersion,
+        'sessionVersionHash': sessionHash,
+      })
+    ]);
   }
 
   void dispose() {

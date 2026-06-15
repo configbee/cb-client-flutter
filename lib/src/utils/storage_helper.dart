@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/distribution_obj.dart';
 
@@ -49,5 +50,27 @@ class StorageHelper {
     final prefs = await _getPrefs();
     final storageKey = "__configbee::$clientKey::ActiveSession::$objKey";
     await prefs.remove(storageKey);
+  }
+
+  static String _generateVisitorId() {
+    const chars =
+        'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    final rng = Random.secure();
+    final randomPart =
+        List.generate(32, (_) => chars[rng.nextInt(chars.length)]).join();
+    final tsPart =
+        DateTime.now().millisecondsSinceEpoch.toRadixString(36);
+    return '$tsPart-$randomPart';
+  }
+
+  static Future<String> getOrCreateVisitorId(
+      String clientKey, String objKey) async {
+    final prefs = await _getPrefs();
+    final storageKey = "__configbee::$clientKey::VisitorId::$objKey";
+    final existing = prefs.getString(storageKey);
+    if (existing != null) return existing;
+    final newId = _generateVisitorId();
+    await prefs.setString(storageKey, newId);
+    return newId;
   }
 }

@@ -1,5 +1,59 @@
 import 'cb_types.dart';
 
+class ContentModifier {
+  final String type;
+  final Map<String, dynamic>? args;
+  final List<ContentModifier>? conditions;
+  final Map<String, OptionData>? content;
+
+  ContentModifier({
+    required this.type,
+    this.args,
+    this.conditions,
+    this.content,
+  });
+
+  factory ContentModifier.fromJson(Map<String, dynamic> json) {
+    Map<String, OptionData>? content;
+    final contentJson = json['content'] as Map<String, dynamic>?;
+    if (contentJson != null) {
+      content = contentJson.map(
+          (k, v) => MapEntry(k, OptionData.fromJson(v as Map<String, dynamic>)));
+    }
+
+    List<ContentModifier>? conditions;
+    final conditionsJson = json['conditions'] as List<dynamic>?;
+    if (conditionsJson != null) {
+      conditions = conditionsJson
+          .map((e) => ContentModifier.fromJson(e as Map<String, dynamic>))
+          .toList();
+    }
+
+    return ContentModifier(
+      type: json['type'] as String,
+      args: json['args'] as Map<String, dynamic>?,
+      conditions: conditions,
+      content: content,
+    );
+  }
+}
+
+class ContentModifiers {
+  final List<String> keys;
+  final Map<String, ContentModifier> data;
+
+  ContentModifiers({required this.keys, required this.data});
+
+  factory ContentModifiers.fromJson(Map<String, dynamic> json) {
+    final data = (json['data'] as Map<String, dynamic>).map((k, v) =>
+        MapEntry(k, ContentModifier.fromJson(v as Map<String, dynamic>)));
+    return ContentModifiers(
+      keys: (json['keys'] as List).cast<String>(),
+      data: data,
+    );
+  }
+}
+
 class DistributionObjMeta {
   final String versionId;
   final String versionTs;
@@ -97,11 +151,13 @@ class DistributionObjData {
   final String? key;
   final DistributionObjMeta meta;
   final Map<String, OptionData> content;
+  final ContentModifiers? contentModifiers;
 
   DistributionObjData({
     required this.meta,
     required this.content,
     this.key,
+    this.contentModifiers,
   });
 
   factory DistributionObjData.fromJson(Map<String, dynamic> json) {
@@ -112,10 +168,13 @@ class DistributionObjData {
       contentMap[key] = OptionData.fromJson(value as Map<String, dynamic>);
     });
 
+    final cmJson = json['contentModifiers'] as Map<String, dynamic>?;
+
     return DistributionObjData(
       key: json['key'] as String?,
       meta: DistributionObjMeta.fromJson(json['meta'] as Map<String, dynamic>),
       content: contentMap,
+      contentModifiers: cmJson != null ? ContentModifiers.fromJson(cmJson) : null,
     );
   }
 
