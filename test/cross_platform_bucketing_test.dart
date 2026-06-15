@@ -10,9 +10,16 @@ import 'package:configbee_flutter/src/utils/percentage_bucketing.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  final csvPath = '${Directory.current.path}/../internal-docs/percentage-bucketing-test-vectors.csv';
+  final csvFile = File(csvPath);
+
+  if (!csvFile.existsSync()) {
+    test('cross-platform bucketing tests', () {}, skip: 'CSV not found at $csvPath');
+    return;
+  }
+
   group('cross-platform consistency — 1000 samples (500 VISITOR + 500 ASSIGNMENT)', () {
-    final csvPath = '${Directory.current.path}/../internal-docs/percentage-bucketing-test-vectors.csv';
-    final lines = File(csvPath).readAsLinesSync().skip(1); // skip header
+    final lines = csvFile.readAsLinesSync().skip(1); // skip header
 
     for (final line in lines) {
       final parts = line.split(',');

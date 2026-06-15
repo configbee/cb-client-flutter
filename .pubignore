@@ -139,4 +139,4 @@ app.*.symbols
 
 # Extra pub-only exclusions
 test/
-*.sh
+tool/*.sh

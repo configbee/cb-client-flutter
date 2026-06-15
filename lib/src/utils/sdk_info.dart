@@ -1,10 +1,3 @@
-import 'package:package_info_plus/package_info_plus.dart';
+import 'package:configbee_flutter/src/sdk_version.g.dart';
 
-String? _cachedVersion;
-
-Future<String> getSdkVersion() async {
-  if (_cachedVersion != null) return _cachedVersion!;
-  final info = await PackageInfo.fromPlatform();
-  _cachedVersion = info.version;
-  return _cachedVersion!;
-}
+Future<String> getSdkVersion() async => sdkVersion;
